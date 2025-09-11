@@ -1,30 +1,22 @@
-// baseTest.js
-//const { test as base, expect } = require('@playwright/test');
-import baseTest ,{expect} from '@playwright/test';
-import { LoginPage } from '../POM/loginPage'
-import { DashBoardPage } from '../POM/dashBoardPage'
-import { AdminPage } from '../POM/adminPage'
+import {test as base,expect} from '@playwright/test'
+import { PageManager } from '../POM/PageManager';
 
 
 
 
+export const test = base.extend({
+  // Define our custom 'pm' fixture
+  pm: async ({ page }, use) => {
+    // Navigate and perform login once for all tests
+    await page.goto('/web/index.php/auth/login');
+    page.waitForTimeout(5000)
+    const pm = new PageManager(page);
+    
+    //await pm.getLoginPage().login('Admin', 'admin123');
+    //await pm.getDashBoardPage().navigatesToAdminPage();
 
-export const test = baseTest.extend({
-  loginpage: async ({ page }, use) => {
-    await page.goto('https://opensource-demo.orangehrmlive.com/web/index.php/auth/login');
-    const loginpage = new LoginPage(page);
-    await use(loginpage);
+    // The 'use' function provides the fixture to the test
+    await use(pm);
   },
-
-  dashBoardPage: async ({ page }, use) => {
-    const dashBoardPage = new DashBoardPage(page);
-    await use(dashBoardPage);
-  },
-
-  adminPage: async ({ page }, use) => {
-    const adminPage = new AdminPage(page);
-    await use(adminPage);
-  }
 });
-
 export { expect };
