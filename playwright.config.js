@@ -47,11 +47,23 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
+    // {
+    //   name: 'chromium',
+    //   use: { ...devices['Desktop Chrome'] },
+    // },
+    //For storage State
+    { name: 'setup', testMatch: /.*\.setup\.js/ },  // Matches your auth.setup.js
+
+    // Your test projects (e.g., for different browsers)
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'playwright/.auth/user.json',  // Load the saved state
+      },
+      dependencies: ['setup'],  // Runs setup before tests
     },
-
+    
     // {
     //   name: 'firefox',
     //   use: { ...devices['Desktop Firefox'] },
@@ -80,7 +92,7 @@ export default defineConfig({
     // {
     //   name: 'Google Chrome',
     //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-    // },
+    // }, 
   ],
 
   /* Run your local dev server before starting the tests */
