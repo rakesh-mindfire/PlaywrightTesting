@@ -51,49 +51,51 @@ pipeline {
         }
 
         stage('Clear Cache if Dependencies Changed') {
-            steps {
-                script {
-                    // Check if package-lock.json exists
-                    if (!fileExists('package-lock.json')) {
-                        error "package-lock.json not found. Please generate and commit it to the repository."
-                    }
-                    // Debug: List package-lock.json
-                    bat 'dir package-lock.json'
-                    // Compute SHA1 hash of package-lock.json
-                    def lockFileHash = ''
-                    try {
-                        // Try PowerShell first (since it worked)
-                        lockFileHash = bat(script: 'powershell -Command "(Get-FileHash -Path package-lock.json -Algorithm SHA1).Hash.ToLower()"', returnStdout: true).trim()
-                        echo "Computed package-lock.json hash (PowerShell): ${lockFileHash}"
-                    } catch (Exception psE) {
-                        echo "Error computing hash with PowerShell: ${psE.message}"
-                        // Fallback to certutil
-                        try {
-                            def rawOutput = bat(script: 'certutil -hashfile package-lock.json SHA1', returnStdout: true).trim()
-                            echo "Raw certutil output: ${rawOutput}"
-                            lockFileHash = bat(script: 'certutil -hashfile package-lock.json SHA1 | findstr /R "[0-9a-fA-F]\\{40\\}"', returnStdout: true).trim()
-                            echo "Computed package-lock.json hash (certutil): ${lockFileHash}"
-                        } catch (Exception e) {
-                            echo "Error computing hash with certutil: ${e.message}"
-                            error "Failed to compute SHA1 hash of package-lock.json"
-                        }
-                    }
-                    if (lockFileHash == '') {
-                        error "Computed hash is empty. Cannot proceed with cache validation."
-                    }
-                    def cachedHashFile = "${NPM_CACHE_DIR}\\lockfile_hash.txt"
-                    def cachedHash = fileExists(cachedHashFile) ? readFile(cachedHashFile).trim() : ''
-                    echo "Cached hash: ${cachedHash}"
-                    if (cachedHash != lockFileHash) {
-                        bat """
-                            if exist "${NPM_CACHE_DIR}\\node_modules" rmdir /S /Q "${NPM_CACHE_DIR}\\node_modules"
-                            echo ${lockFileHash}>"${cachedHashFile}"
-                            dir "${NPM_CACHE_DIR}"
-                        """
-                    }
+        steps {
+            script {
+                // Check if package-lock.json exists
+                if (!fileExists('package-lock.json')) {
+                    error "package-lock.json not found. Please generate and commit it to the repository."
+                }
+                // Debug: List package-lock.json
+                bat 'dir package-lock.json'
+                
+                // Compute SHA1 hash of package-lock.json
+                def lockFileHash = ''
+                try {
+                    // Use PowerShell for robustness.
+                    lockFileHash = bat(script: 'powershell -Command "(Get-FileHash -Path package-lock.json -Algorithm SHA1).Hash.ToLower()"', returnStdout: true).trim()
+                    echo "Computed package-lock.json hash (PowerShell): ${lockFileHash}"
+                } catch (Exception e) {
+                    echo "Error computing hash with PowerShell: ${e.message}"
+                    error "Failed to compute SHA1 hash of package-lock.json."
+                }
+                
+                if (lockFileHash == '') {
+                    error "Computed hash is empty. Cannot proceed with cache validation."
+                }
+                
+                def cachedHashFile = "${NPM_CACHE_DIR}\\lockfile_hash.txt"
+                def cachedHash = fileExists(cachedHashFile) ? readFile(cachedHashFile).trim() : ''
+                echo "Cached hash: ${cachedHash}"
+                
+                if (cachedHash != lockFileHash) {
+                    echo "Dependencies changed. Clearing cache and saving new hash."
+                    
+                    // Clear the node_modules cache directory
+                    bat "if exist \"${NPM_CACHE_DIR}\\node_modules\" rmdir /S /Q \"${NPM_CACHE_DIR}\\node_modules\""
+                    
+                    // Write the new hash using Groovy's writeFile
+                    writeFile(file: cachedHashFile, text: lockFileHash)
+                    
+                    bat "dir \"${NPM_CACHE_DIR}\""
+                } else {
+                    echo "Dependencies have not changed. Reusing existing cache."
                 }
             }
         }
+        }
+
 
         stage('Restore Cache') {
             steps {
