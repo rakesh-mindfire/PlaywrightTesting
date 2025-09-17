@@ -1,14 +1,14 @@
 pipeline {
     agent any
     
+    // We keep skipDefaultCheckout() to maintain full control of the workspace.
     options {
-        // This is the key. It prevents the default declarative checkout
-        // so you can control it yourself.
         skipDefaultCheckout()
     }
     
     environment {
-        NPM_CACHE_DIR = "C:\\JenkinsCache\\npm\\${env.JOB_NAME}"
+        // We still need this for the test execution stage
+        // but the cache directories are no longer used.
         PLAYWRIGHT_CACHE_DIR = "${env.USERPROFILE}\\.cache\\ms-playwright"
     }
     
@@ -24,107 +24,30 @@ pipeline {
         stage('Clean Workspace and Checkout') {
             steps {
                 script {
-                    // Use cleanWs to ensure the workspace is completely empty
-                    // before the git clone.
+                    // This step is critical to ensure a fresh start on every build.
                     cleanWs(
                         cleanWhenFailure: true,
                         deleteDirs: true,
                         notFailBuild: true
                     )
                 }
-                // Now perform the checkout
                 git branch: 'Rakesh', url: 'https://github.com/rakesh-mindfire/PlaywrightTesting.git'
             }
         }
-        
-        stage('Setup Cache Directory') {
-            steps {
-                bat """
-                    if not exist "C:\\JenkinsCache" mkdir "C:\\JenkinsCache"
-                    if not exist "${NPM_CACHE_DIR}" mkdir "${NPM_CACHE_DIR}"
-                    dir "C:\\JenkinsCache"
-                """
-            }
-        }
-
-        stage('Clear Cache if Dependencies Changed') {
-            steps {
-                script {
-                    if (!fileExists('package-lock.json')) {
-                        error "package-lock.json not found. Please generate and commit it to the repository."
-                    }
-                    bat 'dir package-lock.json'
-                    def lockFileHash = ''
-                    try {
-                        lockFileHash = bat(script: 'powershell -Command "(Get-FileHash -Path package-lock.json -Algorithm SHA1).Hash.ToLower()"', returnStdout: true).trim()
-                        echo "Computed package-lock.json hash (PowerShell): ${lockFileHash}"
-                    } catch (Exception e) {
-                        echo "Error computing hash with PowerShell: ${e.message}"
-                        error "Failed to compute SHA1 hash of package-lock.json."
-                    }
-                    if (lockFileHash == '') {
-                        error "Computed hash is empty. Cannot proceed with cache validation."
-                    }
-                    def cachedHashFile = "${NPM_CACHE_DIR}\\lockfile_hash.txt"
-                    def cachedHash = fileExists(cachedHashFile) ? readFile(cachedHashFile).trim() : ''
-                    echo "Cached hash: ${cachedHash}"
-                    if (cachedHash != lockFileHash) {
-                        echo "Dependencies changed. Clearing cache and saving new hash."
-                        bat "if exist \"${NPM_CACHE_DIR}\\node_modules\" rmdir /S /Q \"${NPM_CACHE_DIR}\\node_modules\""
-                        writeFile(file: cachedHashFile, text: lockFileHash)
-                        bat "dir \"${NPM_CACHE_DIR}\""
-                    } else {
-                        echo "Dependencies have not changed. Reusing existing cache."
-                    }
-                }
-            }
-        }
-
-        stage('Restore Cache') {
-    steps {
-        script {
-            def nodeModulesCacheDir = "${NPM_CACHE_DIR}\\node_modules"
-            def playwrightCacheDir = "${PLAYWRIGHT_CACHE_DIR}"
-            
-            if (fileExists(nodeModulesCacheDir)) {
-                echo "Restoring cached node_modules..."
-                bat "xcopy /E /I /Y \"${nodeModulesCacheDir}\" node_modules"
-            } else {
-                echo "No node_modules cache directory found."
-            }
-
-            if (fileExists(playwrightCacheDir)) {
-                echo "Restoring cached Playwright browsers..."
-                bat "xcopy /E /I /Y \"${playwrightCacheDir}\" \"${env.USERPROFILE}\\.cache\\ms-playwright\""
-            } else {
-                echo "No Playwright cache directory found."
-            }
-        }
-    }
-}
 
         stage('Install Dependencies') {
             steps {
+                echo 'Installing dependencies from scratch...'
+                // npm ci is the best choice for CI as it uses the package-lock.json
                 bat 'npm ci'
             }
         }
 
         stage('Install Playwright') {
             steps {
+                echo 'Installing Playwright browsers and dependencies...'
+                // This command will download browsers every time
                 bat 'npx playwright install --with-deps'
-            }
-        }
-
-        stage('Save Cache') {
-            steps {
-                bat """
-                    if not exist "${NPM_CACHE_DIR}" mkdir "${NPM_CACHE_DIR}"
-                    xcopy /E /I /Y node_modules "${NPM_CACHE_DIR}\\node_modules"
-                    if not exist "${env.USERPROFILE}\\.cache\\ms-playwright" mkdir "${env.USERPROFILE}\\.cache\\ms-playwright"
-                    xcopy /E /I /Y "${env.USERPROFILE}\\.cache\\ms-playwright" "${PLAYWRIGHT_CACHE_DIR}"
-                    dir "${NPM_CACHE_DIR}\\node_modules"
-                    dir "${env.USERPROFILE}\\.cache\\ms-playwright"
-                """
             }
         }
 
@@ -165,12 +88,9 @@ pipeline {
                 alwaysLinkToLastBuild: true,
                 allowMissing: true
             ])
+            // Final cleanup to ensure the next build is completely fresh.
             cleanWs(
-                notFailBuild: true, 
-                patterns: [
-                    [pattern: 'C:\\JenkinsCache\\**', type: 'EXCLUDE'], 
-                    [pattern: "${env.USERPROFILE}\\.cache\\ms-playwright\\**", type: 'EXCLUDE']
-                ]
+                notFailBuild: true
             )
         }
     }
