@@ -14,24 +14,21 @@ pipeline {
     }
 
     stages {
+        
         stage('Clean Workspace') {
-            steps {
-                script {
-                    // Retry workspace deletion to handle locked files
-                    retry(3) {
-                        bat """
-                            if exist "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\PlaywrightPipeline" (
-                                taskkill /F /FI "IMAGENAME eq git.exe" /T || echo No git.exe processes to terminate
-                                taskkill /F /FI "IMAGENAME eq node.exe" /T || echo No node.exe processes to terminate
-                                rmdir /S /Q "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\PlaywrightPipeline" || echo Failed to delete workspace, retrying...
-                                dir "C:\\ProgramData\\Jenkins\\.jenkins\\workspace" || echo Workspace directory does not exist
-                            )
-                        """
-                        cleanWs(notFailBuild: true)
-                    }
-                }
-            }
+    steps {
+        script {
+            // A simple, effective way to ensure a clean workspace.
+            // It will delete the directory and recreate it for the checkout.
+            // The `cleanWs` step is more robust at handling locked files.
+            cleanWs(
+                cleanWhenFailure: true,
+                deleteDirs: true,
+                notFailBuild: true
+            )
         }
+    }
+}
 
         stage('Setup Cache Directory') {
             steps {
