@@ -62,19 +62,19 @@ pipeline {
                     // Compute SHA1 hash of package-lock.json
                     def lockFileHash = ''
                     try {
-                        // Try certutil first
-                        def rawOutput = bat(script: 'certutil -hashfile package-lock.json SHA1', returnStdout: true).trim()
-                        echo "Raw certutil output: ${rawOutput}"
-                        lockFileHash = bat(script: 'certutil -hashfile package-lock.json SHA1 | findstr /R "[0-9a-fA-F]\\{40\\}"', returnStdout: true).trim()
-                        echo "Computed package-lock.json hash: ${lockFileHash}"
-                    } catch (Exception e) {
-                        echo "Error computing hash with certutil: ${e.message}"
-                        // Fallback to PowerShell for hashing
+                        // Try PowerShell first (since it worked)
+                        lockFileHash = bat(script: 'powershell -Command "(Get-FileHash -Path package-lock.json -Algorithm SHA1).Hash.ToLower()"', returnStdout: true).trim()
+                        echo "Computed package-lock.json hash (PowerShell): ${lockFileHash}"
+                    } catch (Exception psE) {
+                        echo "Error computing hash with PowerShell: ${psE.message}"
+                        // Fallback to certutil
                         try {
-                            lockFileHash = bat(script: 'powershell -Command "(Get-FileHash -Path package-lock.json -Algorithm SHA1).Hash.ToLower()"', returnStdout: true).trim()
-                            echo "Computed package-lock.json hash (PowerShell): ${lockFileHash}"
-                        } catch (Exception psE) {
-                            echo "Error computing hash with PowerShell: ${psE.message}"
+                            def rawOutput = bat(script: 'certutil -hashfile package-lock.json SHA1', returnStdout: true).trim()
+                            echo "Raw certutil output: ${rawOutput}"
+                            lockFileHash = bat(script: 'certutil -hashfile package-lock.json SHA1 | findstr /R "[0-9a-fA-F]\\{40\\}"', returnStdout: true).trim()
+                            echo "Computed package-lock.json hash (certutil): ${lockFileHash}"
+                        } catch (Exception e) {
+                            echo "Error computing hash with certutil: ${e.message}"
                             error "Failed to compute SHA1 hash of package-lock.json"
                         }
                     }
@@ -87,7 +87,7 @@ pipeline {
                     if (cachedHash != lockFileHash) {
                         bat """
                             if exist "${NPM_CACHE_DIR}\\node_modules" rmdir /S /Q "${NPM_CACHE_DIR}\\node_modules"
-                            echo ${lockFileHash}> "${cachedHashFile}"
+                            echo ${lockFileHash}>"${cachedHashFile}"
                             dir "${NPM_CACHE_DIR}"
                         """
                     }
