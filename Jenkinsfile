@@ -14,6 +14,18 @@ pipeline {
     }
 
     stages {
+        stage('Clean Workspace') {
+            steps {
+                // Forcefully clean workspace to avoid .git corruption
+                bat """
+                    if exist "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\PlaywrightPipeline" (
+                        rmdir /S /Q "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\PlaywrightPipeline"
+                    )
+                """
+                cleanWs(notFailBuild: true)
+            }
+        }
+
         stage('Setup Cache Directory') {
             steps {
                 // Ensure cache directory exists
@@ -41,8 +53,27 @@ pipeline {
                     // Debug: List package-lock.json
                     bat 'dir package-lock.json'
                     // Compute SHA1 hash of package-lock.json
-                    def lockFileHash = bat(script: 'certutil -hashfile package-lock.json SHA1 | findstr /R "[0-9a-fA-F]\\{40\\}"', returnStdout: true).trim()
-                    echo "Computed package-lock.json hash: ${lockFileHash}"
+                    def lockFileHash = ''
+                    try {
+                        // Try certutil first
+                        def rawOutput = bat(script: 'certutil -hashfile package-lock.json SHA1', returnStdout: true).trim()
+                        echo "Raw certutil output: ${rawOutput}"
+                        lockFileHash = bat(script: 'certutil -hashfile package-lock.json SHA1 | findstr /R "[0-9a-fA-F]\\{40\\}"', returnStdout: true).trim()
+                        echo "Computed package-lock.json hash: ${lockFileHash}"
+                    } catch (Exception e) {
+                        echo "Error computing hash with certutil: ${e.message}"
+                        // Fallback to PowerShell for hashing
+                        try {
+                            lockFileHash = bat(script: 'powershell -Command "(Get-FileHash -Path package-lock.json -Algorithm SHA1).Hash.ToLower()"', returnStdout: true).trim()
+                            echo "Computed package-lock.json hash (PowerShell): ${lockFileHash}"
+                        } catch (Exception psE) {
+                            echo "Error computing hash with PowerShell: ${psE.message}"
+                            error "Failed to compute SHA1 hash of package-lock.json"
+                        }
+                    }
+                    if (lockFileHash == '') {
+                        error "Computed hash is empty. Cannot proceed with cache validation."
+                    }
                     def cachedHashFile = "${NPM_CACHE_DIR}\\lockfile_hash.txt"
                     def cachedHash = fileExists(cachedHashFile) ? readFile(cachedHashFile).trim() : ''
                     echo "Cached hash: ${cachedHash}"
@@ -67,8 +98,8 @@ pipeline {
                     if exist "${PLAYWRIGHT_CACHE_DIR}" (
                         xcopy /E /I /Y "${PLAYWRIGHT_CACHE_DIR}" "${env.USERPROFILE}\\.cache\\ms-playwright"
                     )
-                    dir node_modules
-                    dir "${env.USERPROFILE}\\.cache\\ms-playwright"
+                    dir node_modules || echo No node_modules directory found
+                    dir "${env.USERPROFILE}\\.cache\\ms-playwright" || echo No Playwright cache directory found
                 """
             }
         }
