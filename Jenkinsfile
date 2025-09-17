@@ -16,13 +16,20 @@ pipeline {
     stages {
         stage('Clean Workspace') {
             steps {
-                // Forcefully clean workspace to avoid .git corruption
-                bat """
-                    if exist "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\PlaywrightPipeline" (
-                        rmdir /S /Q "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\PlaywrightPipeline"
-                    )
-                """
-                cleanWs(notFailBuild: true)
+                script {
+                    // Retry workspace deletion to handle locked files
+                    retry(3) {
+                        bat """
+                            if exist "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\PlaywrightPipeline" (
+                                taskkill /F /FI "IMAGENAME eq git.exe" /T || echo No git.exe processes to terminate
+                                taskkill /F /FI "IMAGENAME eq node.exe" /T || echo No node.exe processes to terminate
+                                rmdir /S /Q "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\PlaywrightPipeline" || echo Failed to delete workspace, retrying...
+                                dir "C:\\ProgramData\\Jenkins\\.jenkins\\workspace" || echo Workspace directory does not exist
+                            )
+                        """
+                        cleanWs(notFailBuild: true)
+                    }
+                }
             }
         }
 
