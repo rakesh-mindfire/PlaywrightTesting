@@ -17,9 +17,15 @@ pipeline {
         
         stage('Install Dependencies') {
             steps {
-                // Cache node_modules based on package-lock.json
-                cache(path: 'node_modules', key: "npm-cache-${env.JOB_NAME}-${hashFiles('**/package-lock.json')}") {
-                    bat 'npm ci'
+                script {
+                    // Compute SHA1 hash of package-lock.json for cache key (Windows-compatible)
+                    def lockFileHash = bat(script: 'certutil -hashfile package-lock.json SHA1 | findstr /V "hash"', returnStdout: true).trim()
+                    // Clean up hash to remove extra spaces or newlines
+                    lockFileHash = lockFileHash.replaceAll('\\s+', '')
+                    // Cache node_modules using the computed hash
+                    cache(path: 'node_modules', key: "npm-cache-${env.JOB_NAME}-${lockFileHash}") {
+                        bat 'npm ci'
+                    }
                 }
             }
         }
@@ -27,7 +33,7 @@ pipeline {
         stage('Install Playwright') {
             steps {
                 // Cache Playwright browser binaries
-                cache(path: "${env.HOME}/.cache/ms-playwright", key: "playwright-cache-${env.JOB_NAME}-${env.PLAYWRIGHT_VERSION ?: 'latest'}") {
+                cache(path: "${env.USERPROFILE}\\.cache\\ms-playwright", key: "playwright-cache-${env.JOB_NAME}-v1.47.0") {
                     bat 'npx playwright install --with-deps'
                 }
             }
