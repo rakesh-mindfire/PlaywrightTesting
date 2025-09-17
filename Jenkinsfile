@@ -48,28 +48,101 @@ pipeline {
         }
 
         stage('Clear Cache if Dependencies Changed') {
-            // ... The updated stage from the previous conversation.
-            // Copy and paste the corrected code here.
+            steps {
+                script {
+                    if (!fileExists('package-lock.json')) {
+                        error "package-lock.json not found. Please generate and commit it to the repository."
+                    }
+                    bat 'dir package-lock.json'
+                    def lockFileHash = ''
+                    try {
+                        lockFileHash = bat(script: 'powershell -Command "(Get-FileHash -Path package-lock.json -Algorithm SHA1).Hash.ToLower()"', returnStdout: true).trim()
+                        echo "Computed package-lock.json hash (PowerShell): ${lockFileHash}"
+                    } catch (Exception e) {
+                        echo "Error computing hash with PowerShell: ${e.message}"
+                        error "Failed to compute SHA1 hash of package-lock.json."
+                    }
+                    if (lockFileHash == '') {
+                        error "Computed hash is empty. Cannot proceed with cache validation."
+                    }
+                    def cachedHashFile = "${NPM_CACHE_DIR}\\lockfile_hash.txt"
+                    def cachedHash = fileExists(cachedHashFile) ? readFile(cachedHashFile).trim() : ''
+                    echo "Cached hash: ${cachedHash}"
+                    if (cachedHash != lockFileHash) {
+                        echo "Dependencies changed. Clearing cache and saving new hash."
+                        bat "if exist \"${NPM_CACHE_DIR}\\node_modules\" rmdir /S /Q \"${NPM_CACHE_DIR}\\node_modules\""
+                        writeFile(file: cachedHashFile, text: lockFileHash)
+                        bat "dir \"${NPM_CACHE_DIR}\""
+                    } else {
+                        echo "Dependencies have not changed. Reusing existing cache."
+                    }
+                }
+            }
         }
 
         stage('Restore Cache') {
-            // ...
+            steps {
+                bat """
+                    if exist "${NPM_CACHE_DIR}\\node_modules" (
+                        xcopy /E /I /Y "${NPM_CACHE_DIR}\\node_modules" node_modules
+                    )
+                    if exist "${PLAYWRIGHT_CACHE_DIR}" (
+                        xcopy /E /I /Y "${PLAYWRIGHT_CACHE_DIR}" "${env.USERPROFILE}\\.cache\\ms-playwright"
+                    )
+                    dir node_modules || echo No node_modules directory found
+                    dir "${env.USERPROFILE}\\.cache\\ms-playwright" || echo No Playwright cache directory found
+                """
+            }
         }
 
         stage('Install Dependencies') {
-            // ...
+            steps {
+                bat 'npm ci'
+            }
         }
 
         stage('Install Playwright') {
-            // ...
+            steps {
+                bat 'npx playwright install --with-deps'
+            }
         }
 
         stage('Save Cache') {
-            // ...
+            steps {
+                bat """
+                    if not exist "${NPM_CACHE_DIR}" mkdir "${NPM_CACHE_DIR}"
+                    xcopy /E /I /Y node_modules "${NPM_CACHE_DIR}\\node_modules"
+                    if not exist "${env.USERPROFILE}\\.cache\\ms-playwright" mkdir "${env.USERPROFILE}\\.cache\\ms-playwright"
+                    xcopy /E /I /Y "${env.USERPROFILE}\\.cache\\ms-playwright" "${PLAYWRIGHT_CACHE_DIR}"
+                    dir "${NPM_CACHE_DIR}\\node_modules"
+                    dir "${env.USERPROFILE}\\.cache\\ms-playwright"
+                """
+            }
         }
 
         stage('Execute Test Cases') {
-            // ...
+            steps {
+                script {
+                    def envFileId
+                    if ("${params.TEST_ENV}" == 'staging') {
+                        envFileId = 'staging_env_file'
+                    } else if ("${params.TEST_ENV}" == 'prod') {
+                        envFileId = 'prod_env_file'
+                    } else {
+                        envFileId = 'test_env_file'
+                    }
+                    withCredentials([file(credentialsId: envFileId, variable: 'ENV_FILE_PATH')]) {
+                        def props = readProperties(file: ENV_FILE_PATH)
+                        withEnv([
+                            "BASE_URL=${props.BASE_URL}",
+                            "ADMIN_USERNAME=${props.ADMIN_USERNAME}",
+                            "ADMIN_PASSWORD=${props.ADMIN_PASSWORD}"
+                        ]) {
+                            bat "npx playwright test --reporter=line,allure-playwright"
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -84,7 +157,6 @@ pipeline {
                 alwaysLinkToLastBuild: true,
                 allowMissing: true
             ])
-            // It's good practice to do a final cleanup at the end.
             cleanWs(
                 notFailBuild: true, 
                 patterns: [
