@@ -2,7 +2,7 @@ pipeline {
     agent any
     environment {
         // Define persistent cache directories outside workspace
-        NPM_CACHE_DIR = 'C:\\JenkinsCache\\npm\\${env.JOB_NAME}'
+        NPM_CACHE_DIR = "C:\\JenkinsCache\\npm\\${env.JOB_NAME}"
         PLAYWRIGHT_CACHE_DIR = "${env.USERPROFILE}\\.cache\\ms-playwright"
     }
     parameters {
@@ -38,13 +38,13 @@ pipeline {
                         error "package-lock.json not found. Please generate and commit it to the repository."
                     }
                     // Compute SHA1 hash of package-lock.json
-                    def lockFileHash = bat(script: 'certutil -hashfile package-lock.json SHA1 | findstr /V "hash"', returnStdout: true).trim().replaceAll('\\s+', '')
+                    def lockFileHash = bat(script: 'certutil -hashfile package-lock.json SHA1 | findstr /R "[0-9a-fA-F]\\{40\\}"', returnStdout: true).trim()
                     def cachedHashFile = "${NPM_CACHE_DIR}\\lockfile_hash.txt"
                     def cachedHash = fileExists(cachedHashFile) ? readFile(cachedHashFile).trim() : ''
                     if (cachedHash != lockFileHash) {
                         bat """
                             if exist "${NPM_CACHE_DIR}\\node_modules" rmdir /S /Q "${NPM_CACHE_DIR}\\node_modules"
-                            echo ${lockFileHash} > "${cachedHashFile}"
+                            echo ${lockFileHash}> "${cachedHashFile}"
                         """
                     }
                 }
