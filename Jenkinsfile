@@ -81,19 +81,27 @@ pipeline {
         }
 
         stage('Restore Cache') {
-            steps {
-                bat """
-                    if exist "${NPM_CACHE_DIR}\\node_modules" (
-                        xcopy /E /I /Y "${NPM_CACHE_DIR}\\node_modules" node_modules
-                    )
-                    if exist "${PLAYWRIGHT_CACHE_DIR}" (
-                        xcopy /E /I /Y "${PLAYWRIGHT_CACHE_DIR}" "${env.USERPROFILE}\\.cache\\ms-playwright"
-                    )
-                    dir node_modules || echo No node_modules directory found
-                    dir "${env.USERPROFILE}\\.cache\\ms-playwright" || echo No Playwright cache directory found
-                """
+    steps {
+        script {
+            def nodeModulesCacheDir = "${NPM_CACHE_DIR}\\node_modules"
+            def playwrightCacheDir = "${PLAYWRIGHT_CACHE_DIR}"
+            
+            if (fileExists(nodeModulesCacheDir)) {
+                echo "Restoring cached node_modules..."
+                bat "xcopy /E /I /Y \"${nodeModulesCacheDir}\" node_modules"
+            } else {
+                echo "No node_modules cache directory found."
+            }
+
+            if (fileExists(playwrightCacheDir)) {
+                echo "Restoring cached Playwright browsers..."
+                bat "xcopy /E /I /Y \"${playwrightCacheDir}\" \"${env.USERPROFILE}\\.cache\\ms-playwright\""
+            } else {
+                echo "No Playwright cache directory found."
             }
         }
+    }
+}
 
         stage('Install Dependencies') {
             steps {
