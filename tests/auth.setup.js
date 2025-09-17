@@ -1,19 +1,39 @@
-const { test: setup, expect } = require('@playwright/test');
+
+import { test as setup } from '@playwright/test'
+import { LoginPage } from "../pageObject/LoginPage.js";
 const path = require('path');
 
 const authFile = path.join(__dirname, '../playwright/.auth/user.json');
 
 setup('authenticate', async ({ page }) => {
-  // Replace with your app's login URL and selectors.
-  await page.goto(process.env.BASE_URL+'/web/index.php/auth/login');  // Your login page URL
-  await page.getByPlaceholder('Username').fill(process.env.ADMIN_USERNAME)
-  await page.getByPlaceholder('Password').fill(process.env.ADMIN_PASSWORD)  // Selector for password input
-  await page.click('//button[@type="submit"]');     // Selector for submit button
+  const loginPage = new LoginPage(page);
+  await loginPage.goto(process.env.BASE_URL + '/web/index.php/auth/login')
+  await loginPage.login(process.env.ADMIN_USERNAME, process.env.ADMIN_PASSWORD)
+  await page.waitForURL(process.env.BASE_URL + '/web/index.php/dashboard/index');  // Expected post-login URL
 
-  // Wait for successful login (e.g., redirect or element visibility).
-  await page.waitForURL(process.env.BASE_URL+'/web/index.php/dashboard/index');  // Expected post-login URL
-  // Or: await expect(page.locator('#welcome-message')).toBeVisible();
-
-  // Save the authenticated storage state.
+  //// Access cookies from the current context
+  const cookies = await page.context().cookies();
+  const cookieHeader = cookies
+    .map(cookie => `${cookie.name}=${cookie.value}`)
+    .join('; ');
+  // Make the API request using context.request
+  try {
+    await page.context().request.put(
+      'https://opensource-demo.orangehrmlive.com/web/index.php/api/v2/admin/localization',
+      {
+        headers: {
+          'Cookie': cookieHeader,
+          'Content-Type': 'application/json',
+        },
+        data: JSON.stringify({
+          language: 'en_US',
+          dateFormat: 'Y-d-m',
+        }),
+      }
+    );
+  } catch (error) {
+    console.log(`API request failed: ${error.message}`)
+    throw error;
+  }
   await page.context().storageState({ path: authFile });
 });

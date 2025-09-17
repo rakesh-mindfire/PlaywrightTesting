@@ -1,5 +1,6 @@
-import {test as base,expect} from '@playwright/test'
-import { PageManager } from '../POM/PageManager';
+import { test as base, expect } from '@playwright/test'
+import { PageManager } from '../pageObject/PageManager';
+import logger, { setBrowserName } from '../utils/logger';
 
 
 
@@ -7,16 +8,19 @@ import { PageManager } from '../POM/PageManager';
 export const test = base.extend({
   // Define our custom 'pm' fixture
   pm: async ({ page }, use) => {
-    // Navigate and perform login once for all tests
-    await page.goto('/web/index.php/auth/login');
-    page.waitForTimeout(5000)
+    await page.goto('/');
     const pm = new PageManager(page);
-    
-    //await pm.getLoginPage().login('Admin', 'admin123');
-    //await pm.getDashBoardPage().navigatesToAdminPage();
-
-    // The 'use' function provides the fixture to the test
     await use(pm);
   },
+});
+
+test.beforeEach(async ({ browser }, testInfo) => {
+  const browserName = browser.browserType().name();
+  setBrowserName(browserName); // Set browser name before logging
+  logger.info(`==== TEST START: ${testInfo.title} ====`);
+});
+
+test.afterEach(async ({ browser }, testInfo) => {
+  logger.info(`==== TEST END: ${testInfo.title} ====`);
 });
 export { expect };

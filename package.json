@@ -19,7 +19,14 @@
   "scripts": {
     "pretest": "Remove-Item -Recurse -Force allure-results",
     "test": "npx playwright test",
+    "test:staging": "npx $env:TEST_ENV='staging'; npx playwright test",
+    "test:smoke": "npx playwright test --grep 'Smoke'",
     "allure:generate": "npx allure generate allure-results --clean -o allure-report",
     "allure:open": "npx allure open allure-report"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^10.0.0",
+    "playwright": "^1.55.0",
+    "winston": "^3.17.0"
   }
 }

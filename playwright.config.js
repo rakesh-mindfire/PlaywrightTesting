@@ -20,24 +20,38 @@ dotenv.config({ path: path.resolve(__dirname, envFile) });
  * @see https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
+  // Maximum time a test can run
+  timeout: 60000, // 60 seconds
+  //Global setup
+  globalSetup: './tests/Global-setup.js',
+  //Test file directory
   testDir: './tests',
   /* Run tests in files in parallel */
   fullyParallel: false,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  //retries: process.env.CI ? 2 : 0,
+  retries: 2,
   /* Opt out of parallel tests on CI. */
   //workers: process.env.CI ? 1 : undefined,
-  workers: 1,
+  workers: 3,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  
+
   //reporter: 'html',
   reporter: [["line"], ["allure-playwright"]],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-     baseURL: process.env.BASE_URL,
+    baseURL: process.env.BASE_URL,
+    // Maximum time for an action to complete
+    actionTimeout: 15000, // 10 seconds
+
+    // Maximum time for a page to load
+    navigationTimeout: 40000, // 40 seconds
+    expect: {
+      timeout: 15000, // 10 seconds
+    },
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -52,7 +66,7 @@ export default defineConfig({
     //   use: { ...devices['Desktop Chrome'] },
     // },
     //For storage State
-    { name: 'setup', testMatch: /.*\.setup\.js/ },  // Matches your auth.setup.js
+    { name: 'setup', testMatch: /.*\.setup\.js/ },
 
     // Your test projects (e.g., for different browsers)
     {
@@ -63,7 +77,23 @@ export default defineConfig({
       },
       dependencies: ['setup'],  // Runs setup before tests
     },
-    
+    /*{
+      name: 'firefox',
+      use: {
+        ...devices['Desktop Firefox'],
+        storageState: 'playwright/.auth/user.json', // Load saved state
+      },
+      dependencies: ['setup'], // Runs setup before tests
+    },
+    {
+      name: 'webkit',
+      use: {
+        ...devices['Desktop Safari'],
+        storageState: 'playwright/.auth/user.json', // Load saved state
+      },
+      dependencies: ['setup'], // Runs setup before tests
+    },
+
     // {
     //   name: 'firefox',
     //   use: { ...devices['Desktop Firefox'] },

@@ -24,6 +24,12 @@ npx playwright install --with-deps
 ```bash
 npm install dotenv --save-dev
 ```
+```bash
+npm install playwright winston
+```
+```bash
+npm install @faker-js/faker
+```
 
 
 ## Execution
