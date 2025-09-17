@@ -1,5 +1,10 @@
 pipeline {
     agent any
+    environment {
+        // Define persistent cache directories outside workspace
+        NPM_CACHE_DIR = 'C:\\JenkinsCache\\npm\\${env.JOB_NAME}'
+        PLAYWRIGHT_CACHE_DIR = "${env.USERPROFILE}\\.cache\\ms-playwright"
+    }
     parameters {
         choice(
             name: 'TEST_ENV',
@@ -9,33 +14,78 @@ pipeline {
     }
 
     stages {
+        stage('Setup Cache Directory') {
+            steps {
+                // Ensure cache directory exists
+                bat """
+                    if not exist "C:\\JenkinsCache" mkdir "C:\\JenkinsCache"
+                    if not exist "${NPM_CACHE_DIR}" mkdir "${NPM_CACHE_DIR}"
+                """
+            }
+        }
+
         stage('Checkout') {
             steps {
                 git branch: 'Rakesh', url: 'https://github.com/rakesh-mindfire/PlaywrightTesting.git'
             }
         }
-        
-        stage('Install Dependencies') {
+
+        stage('Clear Cache if Dependencies Changed') {
             steps {
                 script {
-                    // Compute SHA1 hash of package-lock.json for cache key (Windows-compatible)
-                    def lockFileHash = bat(script: 'certutil -hashfile package-lock.json SHA1 | findstr /V "hash"', returnStdout: true).trim()
-                    // Clean up hash to remove extra spaces or newlines
-                    lockFileHash = lockFileHash.replaceAll('\\s+', '')
-                    // Cache node_modules using the computed hash
-                    cache(path: 'node_modules', key: "npm-cache-${env.JOB_NAME}-${lockFileHash}") {
-                        bat 'npm ci'
+                    // Check if package-lock.json exists
+                    if (!fileExists('package-lock.json')) {
+                        error "package-lock.json not found. Please generate and commit it to the repository."
+                    }
+                    // Compute SHA1 hash of package-lock.json
+                    def lockFileHash = bat(script: 'certutil -hashfile package-lock.json SHA1 | findstr /V "hash"', returnStdout: true).trim().replaceAll('\\s+', '')
+                    def cachedHashFile = "${NPM_CACHE_DIR}\\lockfile_hash.txt"
+                    def cachedHash = fileExists(cachedHashFile) ? readFile(cachedHashFile).trim() : ''
+                    if (cachedHash != lockFileHash) {
+                        bat """
+                            if exist "${NPM_CACHE_DIR}\\node_modules" rmdir /S /Q "${NPM_CACHE_DIR}\\node_modules"
+                            echo ${lockFileHash} > "${cachedHashFile}"
+                        """
                     }
                 }
             }
         }
 
+        stage('Restore Cache') {
+            steps {
+                // Restore node_modules and Playwright binaries if they exist
+                bat """
+                    if exist "${NPM_CACHE_DIR}\\node_modules" (
+                        xcopy /E /I /Y "${NPM_CACHE_DIR}\\node_modules" node_modules
+                    )
+                    if exist "${PLAYWRIGHT_CACHE_DIR}" (
+                        xcopy /E /I /Y "${PLAYWRIGHT_CACHE_DIR}" "${env.USERPROFILE}\\.cache\\ms-playwright"
+                    )
+                """
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                bat 'npm ci'
+            }
+        }
+
         stage('Install Playwright') {
             steps {
-                // Cache Playwright browser binaries
-                cache(path: "${env.USERPROFILE}\\.cache\\ms-playwright", key: "playwright-cache-${env.JOB_NAME}-v1.47.0") {
-                    bat 'npx playwright install --with-deps'
-                }
+                bat 'npx playwright install --with-deps'
+            }
+        }
+
+        stage('Save Cache') {
+            steps {
+                // Save node_modules and Playwright binaries to cache
+                bat """
+                    if not exist "${NPM_CACHE_DIR}" mkdir "${NPM_CACHE_DIR}"
+                    xcopy /E /I /Y node_modules "${NPM_CACHE_DIR}\\node_modules"
+                    if not exist "${env.USERPROFILE}\\.cache\\ms-playwright" mkdir "${env.USERPROFILE}\\.cache\\ms-playwright"
+                    xcopy /E /I /Y "${env.USERPROFILE}\\.cache\\ms-playwright" "${PLAYWRIGHT_CACHE_DIR}"
+                """
             }
         }
 
@@ -52,10 +102,7 @@ pipeline {
                     }
 
                     withCredentials([file(credentialsId: envFileId, variable: 'ENV_FILE_PATH')]) {
-                        // Read the file content and inject it as env vars
                         def props = readProperties(file: ENV_FILE_PATH)
-                        
-                        // Run the tests by passing each property as an environment variable
                         withEnv([
                             "BASE_URL=${props.BASE_URL}",
                             "ADMIN_USERNAME=${props.ADMIN_USERNAME}",
@@ -80,7 +127,7 @@ pipeline {
                 alwaysLinkToLastBuild: true,
                 allowMissing: true
             ])
-            cleanWs()
+            cleanWs(notFailBuild: true, patterns: [[pattern: 'C:\\JenkinsCache\\**', type: 'EXCLUDE'], [pattern: "${env.USERPROFILE}\\.cache\\ms-playwright\\**", type: 'EXCLUDE']])
         }
     }
 }
