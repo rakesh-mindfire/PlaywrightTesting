@@ -20,6 +20,7 @@ pipeline {
                 bat """
                     if not exist "C:\\JenkinsCache" mkdir "C:\\JenkinsCache"
                     if not exist "${NPM_CACHE_DIR}" mkdir "${NPM_CACHE_DIR}"
+                    dir "C:\\JenkinsCache"
                 """
             }
         }
@@ -37,14 +38,19 @@ pipeline {
                     if (!fileExists('package-lock.json')) {
                         error "package-lock.json not found. Please generate and commit it to the repository."
                     }
+                    // Debug: List package-lock.json
+                    bat 'dir package-lock.json'
                     // Compute SHA1 hash of package-lock.json
                     def lockFileHash = bat(script: 'certutil -hashfile package-lock.json SHA1 | findstr /R "[0-9a-fA-F]\\{40\\}"', returnStdout: true).trim()
+                    echo "Computed package-lock.json hash: ${lockFileHash}"
                     def cachedHashFile = "${NPM_CACHE_DIR}\\lockfile_hash.txt"
                     def cachedHash = fileExists(cachedHashFile) ? readFile(cachedHashFile).trim() : ''
+                    echo "Cached hash: ${cachedHash}"
                     if (cachedHash != lockFileHash) {
                         bat """
                             if exist "${NPM_CACHE_DIR}\\node_modules" rmdir /S /Q "${NPM_CACHE_DIR}\\node_modules"
                             echo ${lockFileHash}> "${cachedHashFile}"
+                            dir "${NPM_CACHE_DIR}"
                         """
                     }
                 }
@@ -61,6 +67,8 @@ pipeline {
                     if exist "${PLAYWRIGHT_CACHE_DIR}" (
                         xcopy /E /I /Y "${PLAYWRIGHT_CACHE_DIR}" "${env.USERPROFILE}\\.cache\\ms-playwright"
                     )
+                    dir node_modules
+                    dir "${env.USERPROFILE}\\.cache\\ms-playwright"
                 """
             }
         }
@@ -85,6 +93,8 @@ pipeline {
                     xcopy /E /I /Y node_modules "${NPM_CACHE_DIR}\\node_modules"
                     if not exist "${env.USERPROFILE}\\.cache\\ms-playwright" mkdir "${env.USERPROFILE}\\.cache\\ms-playwright"
                     xcopy /E /I /Y "${env.USERPROFILE}\\.cache\\ms-playwright" "${PLAYWRIGHT_CACHE_DIR}"
+                    dir "${NPM_CACHE_DIR}\\node_modules"
+                    dir "${env.USERPROFILE}\\.cache\\ms-playwright"
                 """
             }
         }
