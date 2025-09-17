@@ -17,13 +17,19 @@ pipeline {
         
         stage('Install Dependencies') {
             steps {
-                bat 'npm ci'
+                // Cache node_modules based on package-lock.json
+                cache(path: 'node_modules', key: "npm-cache-${env.JOB_NAME}-${hashFiles('**/package-lock.json')}") {
+                    bat 'npm ci'
+                }
             }
         }
 
         stage('Install Playwright') {
             steps {
-                bat 'npx playwright install --with-deps'
+                // Cache Playwright browser binaries
+                cache(path: "${env.HOME}/.cache/ms-playwright", key: "playwright-cache-${env.JOB_NAME}-${env.PLAYWRIGHT_VERSION ?: 'latest'}") {
+                    bat 'npx playwright install --with-deps'
+                }
             }
         }
 
