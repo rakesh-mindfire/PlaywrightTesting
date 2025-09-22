@@ -12,12 +12,9 @@
     "@types/node": "^24.3.1",
     "allure-playwright": "^3.3.3",
     "dotenv": "^17.2.2",
-    "eslint": "^9.35.0",
-    "globals": "^16.4.0",
-    "rimraf": "^6.0.1"
+    "eslint": "^9.35.0"
   },
   "scripts": {
-    "pretest": "Remove-Item -Recurse -Force allure-results",
     "test": "npx playwright test",
     "test:staging": "npx $env:TEST_ENV='staging'; npx playwright test",
     "test:smoke": "npx playwright test --grep 'Smoke'",

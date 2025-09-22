@@ -1,17 +1,10 @@
 pipeline {
     agent any
     
-    // We keep skipDefaultCheckout() to maintain full control of the workspace.
-    options {
-        skipDefaultCheckout()
-    }
-    
     environment {
-        // We still need this for the test execution stage
-        // but the cache directories are no longer used.
-        PLAYWRIGHT_CACHE_DIR = "${env.USERPROFILE}\\.cache\\ms-playwright"
+        // Define cache directory in workspace (Windows-compatible)
+        CACHE_DIR = "${env.WORKSPACE}\\.npm-cache"
     }
-    
     parameters {
         choice(
             name: 'TEST_ENV',
@@ -24,7 +17,6 @@ pipeline {
         stage('Clean Workspace and Checkout') {
             steps {
                 script {
-                    // This step is critical to ensure a fresh start on every build.
                     cleanWs(
                         cleanWhenFailure: true,
                         deleteDirs: true,
@@ -35,10 +27,25 @@ pipeline {
             }
         }
 
+        stage('Restore Cache') {
+            steps {
+                // Restore node_modules, npm cache, and Playwright browsers if they exist
+                bat '''
+                    if exist "%CACHE_DIR%\\node_modules" (
+                        xcopy /E /I /Y "%CACHE_DIR%\\node_modules" "%WORKSPACE%\\node_modules"
+                    )
+                    if exist "%CACHE_DIR%\\.npm" (
+                        xcopy /E /I /Y "%CACHE_DIR%\\.npm" "%USERPROFILE%\\.npm"
+                    )
+                    if exist "%CACHE_DIR%\\ms-playwright" (
+                        xcopy /E /I /Y "%CACHE_DIR%\\ms-playwright" "%USERPROFILE%\\.cache\\ms-playwright"
+                    )
+                '''
+            }
+        }
         stage('Install Dependencies') {
             steps {
-                echo 'Installing dependencies from scratch...'
-                // npm ci is the best choice for CI as it uses the package-lock.json
+                // Use npm ci for CI environments
                 bat 'npm ci'
             }
         }
@@ -46,11 +53,24 @@ pipeline {
         stage('Install Playwright') {
             steps {
                 echo 'Installing Playwright browsers and dependencies...'
-                // This command will download browsers every time
                 bat 'npx playwright install --with-deps'
             }
         }
-
+stage('Save Cache') {
+            steps {
+                // Save node_modules, npm cache, and Playwright browsers
+                bat '''
+                    mkdir "%CACHE_DIR%" || exit /b 0
+                    xcopy /E /I /Y "%WORKSPACE%\\node_modules" "%CACHE_DIR%\\node_modules"
+                    if exist "%USERPROFILE%\\.npm" (
+                        xcopy /E /I /Y "%USERPROFILE%\\.npm" "%CACHE_DIR%\\.npm"
+                    )
+                    if exist "%USERPROFILE%\\.cache\\ms-playwright" (
+                        xcopy /E /I /Y "%USERPROFILE%\\.cache\\ms-playwright" "%CACHE_DIR%\\ms-playwright"
+                    )
+                '''
+            }
+        }
         stage('Execute Test Cases') {
             steps {
                 script {
@@ -88,7 +108,6 @@ pipeline {
                 alwaysLinkToLastBuild: true,
                 allowMissing: true
             ])
-            // Final cleanup to ensure the next build is completely fresh.
             cleanWs(
                 notFailBuild: true
             )

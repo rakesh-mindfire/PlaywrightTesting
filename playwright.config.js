@@ -1,20 +1,11 @@
 // @ts-check
 import { defineConfig, devices } from '@playwright/test';
 
-/**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
- */
-//  import dotenv from 'dotenv';
-// import path from 'path';
+
 const dotenv = require('dotenv');
 const path = require('path');
 const envFile = `.env.${process.env.TEST_ENV || 'test'}`;
 dotenv.config({ path: path.resolve(__dirname, envFile) });
-
-
-
-
 
 /**
  * @see https://playwright.dev/docs/test-configuration
@@ -23,7 +14,7 @@ export default defineConfig({
   // Maximum time a test can run
   timeout: 60000, // 60 seconds
   //Global setup
-  globalSetup: './tests/Global-setup.js',
+  globalSetup: './utils/Global-setup.js',
   //Test file directory
   testDir: './tests',
   /* Run tests in files in parallel */
@@ -35,18 +26,17 @@ export default defineConfig({
   retries: 2,
   /* Opt out of parallel tests on CI. */
   //workers: process.env.CI ? 1 : undefined,
-  workers: 3,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+  workers: 1,
 
+  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   //reporter: 'html',
   reporter: [["line"], ["allure-playwright"]],
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+
   use: {
-    /* Base URL to use in actions like `await page.goto('/')`. */
+    /* Base URL to use in actions like `await page.goto('/')` */
     baseURL: process.env.BASE_URL,
     // Maximum time for an action to complete
     actionTimeout: 15000, // 10 seconds
-
     // Maximum time for a page to load
     navigationTimeout: 40000, // 40 seconds
     expect: {
@@ -61,14 +51,13 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
-    // {
-    //   name: 'chromium',
-    //   use: { ...devices['Desktop Chrome'] },
-    // },
-    //For storage State
-    { name: 'setup', testMatch: /.*\.setup\.js/ },
 
-    // Your test projects (e.g., for different browsers)
+    {
+      name: 'setup',
+      testMatch: /.*\.setup\.js/,
+      testDir: './utils',
+    },
+
     {
       name: 'chromium',
       use: {

@@ -1,4 +1,4 @@
-import logger from '../utils/logger.js';
+import logger from '../utils/Logger.js';
 
 export class LoginPage {
     constructor(page) {
@@ -7,6 +7,11 @@ export class LoginPage {
         this.passwordInput = page.locator('input[name="password"]');
         this.LoginButton = page.locator('button[type="submit"]');
     }
+
+    /**
+     * Navigating to URL
+     * @param {String} url 
+     */
     async goto(url) {
         logger.info(`Navigating to ${url}`)
         try {
@@ -17,7 +22,11 @@ export class LoginPage {
             throw error;
         }
     }
-
+    /**
+     * Login into the application
+     * @param {String} username 
+     * @param {String} password 
+     */
     async login(username, password) {
         logger.info(`logging into application using userName as ${username}`)
         try {
@@ -28,8 +37,5 @@ export class LoginPage {
             logger.error('Failed to login')
             throw error;
         }
-
-
     }
-
 }
